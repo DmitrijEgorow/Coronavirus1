@@ -1,13 +1,23 @@
 package com.dmitrij.coronavirus1;
 
 import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.ViewModelProviders;
 
 import android.Manifest;
+import android.annotation.TargetApi;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.os.Build;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
@@ -15,12 +25,15 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.loader.app.LoaderManager;
 import androidx.loader.content.Loader;
+import androidx.recyclerview.widget.DividerItemDecoration;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import android.provider.ContactsContract;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
@@ -85,7 +98,6 @@ public class ContactsFragment extends Fragment implements LoaderManager.LoaderCa
         recyclerView.setAdapter(mAdapter);
 
 
-
     }
 
 
@@ -116,6 +128,12 @@ public class ContactsFragment extends Fragment implements LoaderManager.LoaderCa
         for (Y21 e : location.getLocation().getTimelines().getConfirmed().getTimeline()) {
             items.add(e.y21 + " " + e.y22);
         }
+
+        // default decorator, scrolling
+        //recyclerView.addItemDecoration(new DividerItemDecoration(recyclerView.getContext(), GridLayoutManager.VERTICAL));
+        //recyclerView.addItemDecoration(new VerticalSpaceItemDecoration(3));
+        recyclerView.addItemDecoration(new HorizontalDividerItemDecoration(getResources().getDrawable(R.drawable.divider)));
+        recyclerView.setAdapter(mAdapter);
 
     }
 
@@ -151,18 +169,43 @@ public class ContactsFragment extends Fragment implements LoaderManager.LoaderCa
 
     }
 
-    private class CustomHolder extends RecyclerView.ViewHolder{
+    private class CustomHolder extends RecyclerView.ViewHolder implements View.OnClickListener {
         TextView title;
 
         public CustomHolder(@NonNull View itemView) {
             super(itemView);
             title = (TextView) itemView.findViewById(R.id.row_text);
+            itemView.setOnClickListener(this);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                itemView.setOnTouchListener(new View.OnTouchListener() {
+                    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
+                    @Override
+                    public boolean onTouch(View view, MotionEvent motionEvent) {
+                        view.findViewById(R.id.row_linear).getBackground().
+                                setHotspot(motionEvent.getX(), motionEvent.getY());
+                        return false;
+                    }
+                });
+            }
         }
-        public void bindModel(String item){
+
+        public void bindModel(String item) {
             title.setText(item);
         }
+
+        @Override
+        public void onClick(View view) {
+            Log.d("gsononclick", "clicked " + getLayoutPosition());
+        }
     }
-    private class CustomAdapter extends RecyclerView.Adapter<CustomHolder>{
+
+    private class CustomAdapter extends RecyclerView.Adapter<CustomHolder> {
+        @Override
+        public int getItemViewType(int position) {
+            return position % 4;
+        }
+
         private List<String> mItems;
 
         public List<String> getmItems() {
@@ -173,16 +216,63 @@ public class ContactsFragment extends Fragment implements LoaderManager.LoaderCa
             this.mItems = mItems;
         }
 
+
         @NonNull
         @Override
         public CustomHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            Log.d("gsononviewtype", viewType+" ");
-            return new CustomHolder(getLayoutInflater().inflate(R.layout.row, parent, false));
+            Log.d("gsononviewtype", viewType + " ");
+            if (viewType == 0 || viewType == 1)
+                return new CustomHolder(getLayoutInflater().inflate(R.layout.row, parent, false));
+            else
+                return new CustomHolder(getLayoutInflater().inflate(R.layout.row_header, parent, false));
         }
 
         @Override
-        public void onBindViewHolder(@NonNull CustomHolder holder, int position) {
+        public void onBindViewHolder(@NonNull CustomHolder holder, final int position) {
             holder.bindModel(mItems.get(position));
+            holder.title.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+
+                    NotificationManager mgr = (NotificationManager) getActivity().getSystemService(Context.NOTIFICATION_SERVICE);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && mgr.getNotificationChannel("socialism") == null) {
+                        mgr.createNotificationChannel(new NotificationChannel("socialism", "Intervention", NotificationManager.IMPORTANCE_DEFAULT));
+                    }
+                    NotificationCompat.Builder b = new NotificationCompat.Builder(view.getContext(), "socialism");
+                    b.setAutoCancel(true);
+                    b.setContentTitle("The element was successfully deleted")
+                            .setContentText(mItems.get(position))
+                            .setSmallIcon(android.R.drawable.stat_notify_more)
+                            .setPriority(Notification.PRIORITY_HIGH)
+                            .setDefaults(Notification.DEFAULT_LIGHTS | Notification.DEFAULT_VIBRATE);
+                    Intent outbound = new Intent(Intent.ACTION_VIEW);
+                    PendingIntent pi = PendingIntent.getActivity(view.getContext(), 0, outbound, PendingIntent.FLAG_UPDATE_CURRENT);
+                    b.setContentIntent(pi);
+
+                    mgr.notify(position, b.build());
+
+                    // Decorator template
+                    // BaseClass base = new Decorator4(new Decorator3(new Decorator2(new Decorator1(new BaseClass()))));
+
+                    mgr.notify(position + 1,
+                            new NotificationCompat.InboxStyle(
+                                    new NotificationCompat.Builder(
+                                            view.getContext(), "socialism"
+                                    ).setSmallIcon(android.R.drawable.stat_notify_voicemail)
+                                            .addAction(android.R.drawable.stat_notify_sdcard, "Open", pi)
+                                            .addAction(android.R.drawable.stat_sys_upload, "Cancel", pi))
+                                    .setSummaryText("SummaryText")
+                                    .addLine("first line")
+                                    .addLine("second line")
+                                    .build());
+
+
+                    mItems.remove(position);
+                    //notifyItemRemoved(position);
+                    notifyDataSetChanged();
+
+                }
+            });
         }
 
         @Override
